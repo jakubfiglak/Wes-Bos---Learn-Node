@@ -49,6 +49,8 @@ storeSchema.index({
   description: 'text',
 });
 
+storeSchema.index({ location: '2dsphere' });
+
 storeSchema.pre('save', async function (next) {
   if (!this.isModified('name')) {
     next(); // skip it
@@ -64,6 +66,8 @@ storeSchema.pre('save', async function (next) {
 
   next();
 });
+
+// TODO: add presave hook to remove unneccessary html from the store name
 
 storeSchema.statics.getTagsList = function () {
   return this.aggregate([
