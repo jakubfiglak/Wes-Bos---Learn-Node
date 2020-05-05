@@ -13,25 +13,17 @@ const multerOptions = {
     if (isPhoto) {
       next(null, true);
     } else {
-      next(
-        {
-          message: "That filetype isn't allowed!",
-        },
-        false,
-      );
+      next({ message: "That filetype isn't allowed!" }, false);
     }
   },
 };
 
 exports.homePage = (req, res) => {
-  console.log(req.name);
   res.render('index');
 };
 
 exports.addStore = (req, res) => {
-  res.render('editStore', {
-    title: 'Add store 🍕🍕🍕',
-  });
+  res.render('editStore', { title: 'Add Store' });
 };
 
 exports.upload = multer(multerOptions).single('photo');
@@ -57,7 +49,7 @@ exports.createStore = async (req, res) => {
   const store = await new Store(req.body).save();
   req.flash(
     'success',
-    `Successfully created ${store.name}. Care to leave a review?`,
+    `Successfully Created ${store.name}. Care to leave a review?`,
   );
   res.redirect(`/store/${store.slug}`);
 };
@@ -65,32 +57,22 @@ exports.createStore = async (req, res) => {
 exports.getStores = async (req, res) => {
   // 1. Query the database for a list of all stores
   const stores = await Store.find();
-  console.log(stores);
-
-  res.render('stores', {
-    title: 'Stores',
-    stores,
-  });
+  res.render('stores', { title: 'Stores', stores });
 };
 
 const confirmOwner = (store, user) => {
   if (!store.author.equals(user._id)) {
-    throw Error('You must own a store in order to edit it');
+    throw Error('You must own a store in order to edit it!');
   }
 };
 
 exports.editStore = async (req, res) => {
   // 1. Find the store given the ID
-  const store = await Store.findOne({
-    _id: req.params.id,
-  });
-  // 2. Confirm they are the owner of the store
+  const store = await Store.findOne({ _id: req.params.id });
+  // 2. confirm they are the owner of the store
   confirmOwner(store, req.user);
   // 3. Render out the edit form so the user can update their store
-  res.render('editStore', {
-    title: `Edit ${store.name}`,
-    store,
-  });
+  res.render('editStore', { title: `Edit ${store.name}`, store });
 };
 
 exports.updateStore = async (req, res) => {
@@ -101,28 +83,26 @@ exports.updateStore = async (req, res) => {
     new: true, // return the new store instead of the old one
     runValidators: true,
   }).exec();
-
-  // redirect to the store and tell them it worked
   req.flash(
     'success',
-    `Successfully updated <strong>${store.name}</strong> <a href="/stores/${store.slug}">View Store</a>`,
+    `Successfully updated <strong>${store.name}</strong>. <a href="/stores/${store.slug}">View Store →</a>`,
   );
   res.redirect(`/stores/${store._id}/edit`);
+  // Redriect them the store and tell them it worked
 };
 
 exports.getStoreBySlug = async (req, res, next) => {
-  const store = await (await Store.findOne({ slug: req.params.slug })).populate(
-    'author',
+  const store = await Store.findOne({ slug: req.params.slug }).populate(
+    'author reviews',
   );
-  if (!store) {
-    return next();
-  }
+  if (!store) return next();
   res.render('store', { store, title: store.name });
 };
 
 exports.getStoresByTag = async (req, res) => {
   const { tag } = req.params;
-  const tagQuery = tag || { $exists: true };
+  const tagQuery = tag || { $exists: true, $ne: [] };
+
   const tagsPromise = Store.getTagsList();
   const storesPromise = Store.find({ tags: tagQuery });
   const [tags, stores] = await Promise.all([tagsPromise, storesPromise]);
@@ -137,7 +117,7 @@ exports.getStoresByTag = async (req, res) => {
 
 exports.searchStores = async (req, res) => {
   const stores = await Store
-    // first find the stores that match
+    // first find stores that match
     .find(
       {
         $text: {
@@ -148,7 +128,7 @@ exports.searchStores = async (req, res) => {
         score: { $meta: 'textScore' },
       },
     )
-    // then sort them
+    // the sort them
     .sort({
       score: { $meta: 'textScore' },
     })
@@ -166,7 +146,7 @@ exports.mapStores = async (req, res) => {
           type: 'Point',
           coordinates,
         },
-        $maxDistance: 10000,
+        $maxDistance: 10000, // 10km
       },
     },
   };
@@ -183,12 +163,11 @@ exports.mapPage = (req, res) => {
 
 exports.heartStore = async (req, res) => {
   const hearts = req.user.hearts.map((obj) => obj.toString());
+
   const operator = hearts.includes(req.params.id) ? '$pull' : '$addToSet';
   const user = await User.findByIdAndUpdate(
     req.user._id,
-    {
-      [operator]: { hearts: req.params.id },
-    },
+    { [operator]: { hearts: req.params.id } },
     { new: true },
   );
   res.json(user);
@@ -199,4 +178,9 @@ exports.getHearts = async (req, res) => {
     _id: { $in: req.user.hearts },
   });
   res.render('stores', { title: 'Hearted Stores', stores });
+};
+
+exports.getTopStores = async (req, res) => {
+  const stores = await Store.getTopStores();
+  res.render('topStores', { stores, title: '⭐ Top Stores!' });
 };
